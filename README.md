@@ -4,7 +4,7 @@
 English / [简体中文](./README_CN.md)
 
 </div>
-This is a Win32 porting of [antirez/Smallchat](https://github.com/antirez/smallchat) created by Salvatore Sanfilippo.
+This is a Win32 porting of <a href="https://github.com/antirez/smallchat">antirez/Smallchat</a> created by Salvatore Sanfilippo.
 
 
 Last Friday, I did some work on this project to get the whole program running on the Win32 platform. Now the server can work properly but without much testing. It seems work well with `nc` client. There are still some non-blocking console input related issuses for the client. But I think it can work correctly in the integrated terminal of VSCode.
