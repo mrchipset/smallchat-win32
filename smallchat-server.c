@@ -32,10 +32,11 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <sys/select.h>
-#include <unistd.h>
+
 
 #include "chatlib.h"
+#include <winsock.h>
+#include <Windows.h>
 
 /* ============================ Data structures =================================
  * The minimal stuff we can afford to have. This example must be simple
@@ -94,7 +95,7 @@ struct client *createClient(int fd) {
  * state in Chat. */
 void freeClient(struct client *c) {
     free(c->nick);
-    close(c->fd);
+    closesocket(c->fd);
     Chat->clients[c->fd] = NULL;
     Chat->numclients--;
     if (Chat->maxclient == c->fd) {
@@ -138,7 +139,7 @@ void sendMsgToAllClientsBut(int excluded, char *s, size_t len) {
         /* Important: we don't do ANY BUFFERING. We just use the kernel
          * socket buffers. If the content does not fit, we don't care.
          * This is needed in order to keep this program simple. */
-        write(Chat->clients[j]->fd,s,len);
+        send(Chat->clients[j]->fd,s,len, 0);
     }
 }
 
@@ -147,6 +148,10 @@ void sendMsgToAllClientsBut(int excluded, char *s, size_t len) {
  * 2. Check if any client sent us some new message.
  * 3. Send the message to all the other clients. */
 int main(void) {
+    if(initWSA() != 0) {
+        return -1;
+    }
+
     initChat();
 
     while(1) {
@@ -189,7 +194,7 @@ int main(void) {
                 char *welcome_msg =
                     "Welcome to Simple Chat! "
                     "Use /nick <nick> to set your nick.\n";
-                write(c->fd,welcome_msg,strlen(welcome_msg));
+                send(c->fd,welcome_msg,strlen(welcome_msg), 0);
                 printf("Connected client fd=%d\n", fd);
             }
 
@@ -204,7 +209,7 @@ int main(void) {
                      * that we read just half a message. In a normal program
                      * that is not designed to be that simple, we should try
                      * to buffer reads until the end-of-the-line is reached. */
-                    int nread = read(j,readbuf,sizeof(readbuf)-1);
+                    int nread = recv(Chat->clients[j]->fd,readbuf,sizeof(readbuf)-1, 0);
 
                     if (nread <= 0) {
                         /* Error or short read means that the socket
@@ -243,7 +248,7 @@ int main(void) {
                             } else {
                                 /* Unsupported command. Send an error. */
                                 char *errmsg = "Unsupported command\n";
-                                write(c->fd,errmsg,strlen(errmsg));
+                                send(c->fd,errmsg,strlen(errmsg), 0);
                             }
                         } else {
                             /* Create a message to send everybody (and show
@@ -268,5 +273,7 @@ int main(void) {
              * even if there is no clients activity. */
         }
     }
+
+    cleanWSA();
     return 0;
 }

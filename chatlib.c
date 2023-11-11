@@ -1,16 +1,12 @@
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 #include <fcntl.h>
-#include <netdb.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <ws2tcpip.h>
+#include <Windows.h>
 /* ======================== Low level networking stuff ==========================
  * Here you will find basic socket stuff that should be part of
  * a decent standard C library, but you know... there are other
@@ -18,8 +14,38 @@
  * Undefined Behavior.
  * =========================================================================== */
 
+/* Setup WSA */
+int initWSA()
+{
+    WSADATA data;
+    WORD wVersionRequested;
+    wVersionRequested = MAKEWORD(2, 2);
+    memset(&data, 0x00, sizeof(data));
+    int ret = WSAStartup(wVersionRequested, &data);
+    if (ret != 0) {
+        printf("WSAStartup fialed with error: %d\n", ret);
+        return -1;
+    }
+
+    if (LOBYTE(data.wVersion) != 2 || HIBYTE(data.wVersion) != 2) {
+        /* Tell the user that we could not find a usable */
+        /* WinSock DLL.                                  */
+        printf("Could not find a usable version of Winsock.dll\n");
+        WSACleanup();
+        return 1;
+    }
+    return 0;
+}
+
+/* Cleanup WSA */
+int cleanWSA()
+{
+    return WSACleanup();
+}
+
 /* Set the specified socket in non-blocking mode, with no delay flag. */
 int socketSetNonBlockNoDelay(int fd) {
+#if 0
     int flags, yes = 1;
 
     /* Set the socket nonblocking.
@@ -31,6 +57,11 @@ int socketSetNonBlockNoDelay(int fd) {
     /* This is best-effort. No need to check for errors. */
     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes));
     return 0;
+#else
+    u_long mode = 1; // 1 enable non-blocking socket
+    ioctlsocket(fd, FIONBIO, &mode);
+    return 0;
+#endif
 }
 
 /* Create a TCP socket listening to 'port' ready to accept connections. */
@@ -68,10 +99,12 @@ int TCPConnect(char *addr, int port, int nonblock) {
     char portstr[6]; /* Max 16 bit number string length. */
     snprintf(portstr,sizeof(portstr),"%d",port);
     memset(&hints,0,sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
 
-    if (getaddrinfo(addr,portstr,&hints,&servinfo) != 0) return -1;
+    int retVal = getaddrinfo(addr,portstr,&hints,&servinfo);
+    if (retVal != 0) return -1;
 
     for (p = servinfo; p != NULL; p = p->ai_next) {
         /* Try to create the socket and to connect it.
@@ -93,7 +126,7 @@ int TCPConnect(char *addr, int port, int nonblock) {
             if (errno == EINPROGRESS && nonblock) return s;
 
             /* Otherwise it's an error. */
-            close(s);
+            closesocket(s);
             break;
         }
 
